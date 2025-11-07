@@ -1,0 +1,167 @@
+import { NextResponse } from 'next/server';
+
+/**
+ * 最新内容 API
+ * GET /api/douban/latest
+ * 
+ * 功能：获取最新上映/播出的影视内容
+ * - 院线新片
+ * - 最新上映
+ * - 即将上映
+ * - 新剧上线
+ * - 本周口碑榜
+ */
+
+interface LatestData {
+  id: string;
+  title: string;
+  rate: string;
+  url: string;
+  cover: string;
+  [key: string]: unknown;
+}
+
+interface CategoryData {
+  name: string;
+  data: LatestData[];
+}
+
+// 内存缓存
+let cacheStore: { data: CategoryData[]; timestamp: number } | null = null;
+const CACHE_EXPIRATION = 30 * 60 * 1000; // 缓存30分钟（最新内容更新更频繁）
+
+export async function GET() {
+  try {
+    // 检查缓存
+    if (cacheStore && Date.now() - cacheStore.timestamp < CACHE_EXPIRATION) {
+      return NextResponse.json({
+        code: 200,
+        data: cacheStore.data,
+        source: 'cache',
+        cachedAt: new Date(cacheStore.timestamp).toISOString()
+      });
+    }
+
+    console.log('🆕 开始获取最新内容数据...');
+
+    // 并行抓取最新内容数据
+    const [
+      nowPlaying,
+      newMovies,
+      comingSoon,
+      newTv,
+      weeklyTop,
+      trending
+    ] = await Promise.all([
+      fetchDoubanLatest('', '院线新片'),
+      fetchDoubanLatest('', '最新'),
+      fetchDoubanLatest('', '即将上映'),
+      fetchDoubanLatest('tv', '最新'),
+      fetchDoubanLatest('', '本周口碑榜'),
+      fetchDoubanLatest('', '热门')
+    ]);
+
+    const resultData: CategoryData[] = [
+      {
+        name: '院线新片',
+        data: nowPlaying.subjects || []
+      },
+      {
+        name: '最新电影',
+        data: newMovies.subjects || []
+      },
+      {
+        name: '即将上映',
+        data: comingSoon.subjects || []
+      },
+      {
+        name: '新剧上线',
+        data: newTv.subjects || []
+      },
+      {
+        name: '本周口碑榜',
+        data: weeklyTop.subjects || []
+      },
+      {
+        name: '热门趋势',
+        data: trending.subjects || []
+      }
+    ];
+
+    // 更新缓存
+    cacheStore = {
+      data: resultData,
+      timestamp: Date.now()
+    };
+
+    console.log('✅ 最新内容数据获取成功');
+
+    return NextResponse.json({
+      code: 200,
+      data: resultData,
+      source: 'fresh',
+      totalCategories: resultData.length,
+      totalItems: resultData.reduce((sum, cat) => sum + cat.data.length, 0)
+    });
+
+  } catch (error) {
+    console.error('❌ 最新内容数据获取失败:', error);
+    
+    return NextResponse.json(
+      {
+        code: 500,
+        msg: 'error',
+        error: error instanceof Error ? error.message : '未知错误'
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * 抓取豆瓣最新内容数据
+ */
+async function fetchDoubanLatest(type: string, tag: string) {
+  try {
+    const url = new URL('https://movie.douban.com/j/search_subjects');
+    url.searchParams.append('type', type);
+    url.searchParams.append('tag', tag);
+    url.searchParams.append('page_limit', '24');
+    url.searchParams.append('page_start', '0');
+    url.searchParams.append('sort', 'time'); // 按时间排序
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'Referer': 'https://movie.douban.com/'
+      },
+      signal: AbortSignal.timeout(10000)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log(`✓ 抓取成功: ${tag} (${data.subjects?.length || 0}条)`);
+    
+    return data;
+  } catch (error) {
+    console.error(`✗ 抓取失败: ${tag}`, error);
+    return { subjects: [] };
+  }
+}
+
+/**
+ * 清除缓存接口
+ * DELETE /api/douban/latest
+ */
+export async function DELETE() {
+  cacheStore = null;
+  
+  return NextResponse.json({
+    code: 200,
+    message: '最新内容缓存已清除'
+  });
+}
