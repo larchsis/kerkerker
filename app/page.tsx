@@ -137,7 +137,7 @@ export default function HomePage() {
         setTop250Movies(top250Data.data.subjects);
       }
     } catch (error) {
-      console.error("加载数据失败:", error);
+       
       setError(
         error instanceof Error ? error.message : "数据加载失败，请稍后重试"
       );
@@ -229,9 +229,8 @@ export default function HomePage() {
         });
       }
     } catch (error) {
-      console.error("搜索播放源失败:", error);
       setToast({
-        message: "搜索播放源时出错，请重试",
+        message:error instanceof Error ? error.message : "搜索播放源时出错，请重试",
         type: "error",
       });
     } finally {
@@ -438,57 +437,84 @@ export default function HomePage() {
 
       {loading ? (
         /* 骨架屏加载状态 */
-        <div className="pt-20">
-          {/* Hero 骨架屏 */}
-          <div className="relative h-[70vh] bg-gradient-to-br from-black via-zinc-950 to-black">
+        <div>
+          {/* Hero 骨架屏 - 匹配实际页面的宽高比 */}
+          <div className="relative w-full aspect-[3/4] md:aspect-[12/5] overflow-hidden bg-gradient-to-br from-zinc-950 via-black to-zinc-950">
             {/* 动画光效 */}
             <div className="absolute inset-0 overflow-hidden">
               <div className="absolute -inset-[100%] animate-[spin_3s_linear_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent" />
             </div>
             
-            <div className="absolute bottom-0 left-0 right-0 px-4 md:px-12 pb-12 md:pb-20">
-              <div className="max-w-2xl space-y-4">
-                {/* 标题骨架 */}
-                <div className="h-16 bg-gradient-to-r from-zinc-900 to-zinc-900/50 rounded-lg w-3/4 animate-pulse" />
-                {/* 副标题骨架 */}
-                <div className="h-6 bg-gradient-to-r from-zinc-900 to-zinc-900/50 rounded-lg w-1/2 animate-pulse" />
-                {/* 描述骨架 */}
-                <div className="space-y-2">
-                  <div className="h-5 bg-gradient-to-r from-zinc-900 to-zinc-900/50 rounded-lg w-full animate-pulse" />
-                  <div className="h-5 bg-gradient-to-r from-zinc-900 to-zinc-900/50 rounded-lg w-5/6 animate-pulse" />
-                  <div className="h-5 bg-gradient-to-r from-zinc-900 to-zinc-900/50 rounded-lg w-4/5 animate-pulse" />
-                </div>
-                {/* 按钮骨架 */}
-                <div className="flex space-x-3 pt-2">
-                  <div className="h-12 bg-gradient-to-r from-zinc-800 to-zinc-900 rounded-lg w-32 animate-pulse" />
-                  <div className="h-12 bg-gradient-to-r from-zinc-900 to-zinc-900/50 rounded-lg w-32 animate-pulse" />
+            {/* 渐变遮罩 */}
+            <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-black/95 via-black/70 md:via-black/50 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
+            
+            {/* 内容骨架 */}
+            <div className="absolute inset-0 flex items-end">
+              <div className="w-full px-4 md:px-12 pb-8 md:pb-12 lg:pb-16">
+                <div className="max-w-3xl space-y-3 md:space-y-4">
+                  {/* 标题骨架 */}
+                  <div className="h-12 md:h-16 bg-zinc-900/50 rounded-lg w-3/4 animate-pulse" />
+                  
+                  {/* 评分和标签骨架 */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="h-7 w-16 bg-zinc-900/50 rounded-full animate-pulse" />
+                    <div className="h-7 w-20 bg-zinc-900/50 rounded-full animate-pulse" />
+                    <div className="h-7 w-24 bg-zinc-900/50 rounded-full animate-pulse" />
+                    <div className="h-7 w-20 bg-zinc-900/50 rounded-full animate-pulse" />
+                  </div>
+                  
+                  {/* 描述骨架 - 仅PC端显示 */}
+                  <div className="hidden md:block space-y-2">
+                    <div className="h-5 bg-zinc-900/50 rounded w-full animate-pulse" />
+                    <div className="h-5 bg-zinc-900/50 rounded w-5/6 animate-pulse" />
+                  </div>
+                  
+                  {/* 按钮骨架 */}
+                  <div className="flex items-center gap-3 pt-1">
+                    <div className="h-12 md:h-14 w-36 md:w-40 bg-zinc-800/50 rounded-lg animate-pulse" />
+                  </div>
                 </div>
               </div>
             </div>
+            
+            {/* 轮播指示器骨架 - 仅桌面端显示 */}
+            <div className="absolute hidden md:flex bottom-6 left-1/2 -translate-x-1/2 items-center gap-2 z-20">
+              {[...Array(5)].map((_, i) => (
+                <div 
+                  key={i} 
+                  className={`${i === 0 ? 'w-8 h-2' : 'w-2 h-2'} bg-white/30 rounded-full animate-pulse`}
+                />
+              ))}
+            </div>
           </div>
 
-          {/* 分类骨架屏 */}
-          <div className="relative z-20 -mt-8 space-y-12 pb-16">
-            {[1, 2, 3].map((i) => (
+          {/* 分类骨架屏 - 10个分类，每个15个卡片 */}
+          <div className="relative z-20 mt-6 sm:-mt-4 md:-mt-4 lg:-mt-4 space-y-10 md:space-y-12 lg:space-y-16 pb-16">
+            {[...Array(10)].map((_, i) => (
               <div key={i} className="px-4 md:px-12">
                 {/* 分类标题骨架 */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 bg-gradient-to-br from-zinc-900 to-black rounded-lg animate-pulse" />
-                  <div className="h-8 bg-gradient-to-r from-zinc-900 to-zinc-900/50 rounded-lg w-48 animate-pulse" />
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-5 h-5 md:w-6 md:h-6 bg-zinc-900/50 rounded animate-pulse" />
+                    <div className="h-7 md:h-8 bg-zinc-900/50 rounded-lg w-32 md:w-40 animate-pulse" />
+                  </div>
+                  {/* 查看全部按钮骨架 */}
+                  <div className="h-5 w-20 bg-zinc-900/30 rounded animate-pulse" />
                 </div>
                 
-                {/* 影片卡片骨架 */}
-                <div className="flex space-x-4 overflow-hidden">
-                  {[1, 2, 3, 4, 5, 6].map((j) => (
-                    <div key={j} className="flex-shrink-0 w-48 md:w-56">
+                {/* 影片卡片骨架 - 15个卡片 */}
+                <div className="flex overflow-x-auto space-x-3 md:space-x-4 pb-4 scrollbar-hide">
+                  {[...Array(15)].map((_, j) => (
+                    <div key={j} className="flex-shrink-0 w-40 sm:w-48 md:w-56">
                       {/* 海报骨架 */}
                       <div className="relative aspect-[2/3] bg-gradient-to-br from-zinc-950 via-black to-zinc-950 rounded-lg overflow-hidden">
-                        <div className="absolute inset-0 animate-pulse bg-gradient-to-tr from-transparent via-white/5 to-transparent" />
+                        <div className="absolute inset-0 animate-pulse bg-gradient-to-tr from-transparent via-white/10 to-transparent" />
                       </div>
                       {/* 标题骨架 */}
-                      <div className="h-6 bg-gradient-to-r from-zinc-900 to-zinc-900/50 rounded-lg w-3/4 mt-2 animate-pulse" />
+                      <div className="h-5 md:h-6 bg-zinc-900/50 rounded w-3/4 mt-2 animate-pulse" />
                       {/* 评分骨架 */}
-                      <div className="h-4 bg-gradient-to-r from-zinc-900 to-zinc-900/30 rounded-lg w-1/2 mt-1 animate-pulse" />
+                      <div className="h-4 bg-zinc-900/30 rounded w-1/2 mt-1.5 animate-pulse" />
                     </div>
                   ))}
                 </div>
@@ -704,7 +730,7 @@ export default function HomePage() {
               
               {/* 内容骨架 */}
               <div className="absolute inset-0 flex items-end">
-                <div className="w-full px-4 md:px-12 pb-8 md:pb-12 lg:pb-16">
+                <div className="w-full px-4 md:px-12 pb-8 md:pb-12 lg:pb-24">
                   <div className="max-w-3xl space-y-4">
                     {/* 标题骨架 */}
                     <div className="h-12 md:h-16 bg-gray-700/50 rounded-lg w-3/4 animate-pulse" />

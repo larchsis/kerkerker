@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createCache } from '@/lib/redis';
 
 // 缓存数据接口
 interface CacheData {
@@ -12,9 +13,9 @@ interface CacheData {
   timestamp: number;
 }
 
-// 内存缓存
-let cacheStore: CacheData | null = null;
-const CACHE_EXPIRATION = 60 * 60 * 24 * 1000; // 缓存1天
+// Redis 缓存配置
+const cache = createCache(86400); // 缓存1天
+const CACHE_KEY = 'douban:top250:all';
 
 /**
  * 豆瓣 Top 250 API
@@ -24,16 +25,16 @@ const CACHE_EXPIRATION = 60 * 60 * 24 * 1000; // 缓存1天
  */
 export async function GET() {
   try {
-    // 检查缓存
-    if (cacheStore && Date.now() - cacheStore.timestamp < CACHE_EXPIRATION) {
+    // 检查 Redis 缓存
+    const cachedData = await cache.get<CacheData>(CACHE_KEY);
+    if (cachedData) {
       return NextResponse.json({
         code: 200,
         data: {
-          subjects: cacheStore.subjects,
+          subjects: cachedData.subjects,
         },
-        source: 'memory-cache',
-        cachedAt: new Date(cacheStore.timestamp).toISOString(),
-        total: cacheStore.subjects.length,
+        source: 'redis-cache',
+        total: cachedData.subjects.length,
       });
     }
 
@@ -65,11 +66,11 @@ export async function GET() {
 
     console.log(`✅ Top 250 抓取完成，共 ${allMovies.length} 部`);
 
-    // 更新缓存
-    cacheStore = {
+    // 更新 Redis 缓存
+    await cache.set(CACHE_KEY, {
       subjects: allMovies,
       timestamp: Date.now(),
-    };
+    });
 
     return NextResponse.json({
       code: 200,
@@ -81,8 +82,6 @@ export async function GET() {
     });
 
   } catch (error) {
-    console.error('❌ Top 250 抓取失败:', error);
-    
     return NextResponse.json(
       {
         code: 500,
@@ -135,10 +134,10 @@ async function fetchTop250Batch(start: number) {
  * DELETE /api/douban/250
  */
 export async function DELETE() {
-  cacheStore = null;
+  await cache.del(CACHE_KEY);
   
   return NextResponse.json({
     code: 200,
-    message: 'Top 250 缓存已清除',
+    message: 'Top 250 缓存已清除'
   });
 }

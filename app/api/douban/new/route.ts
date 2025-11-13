@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
-
-// 缓存数据接口
-interface CacheData {
-  data: CategoryData[];
-  timestamp: number;
-}
+import { createCache } from '@/lib/redis';
 
 interface CategoryData {
   name: string;
@@ -17,9 +12,9 @@ interface CategoryData {
   }>;
 }
 
-// 内存缓存（简单实现，生产环境建议使用 Redis）
-let cacheStore: CacheData | null = null;
-const CACHE_EXPIRATION = 60 * 60 * 24 * 1000; // 缓存1天（毫秒）
+// Redis 缓存配置
+const cache = createCache(86400); // 缓存1天（秒）
+const CACHE_KEY = 'douban:new:all';
 
 /**
  * 豆瓣数据实时抓取 API
@@ -32,13 +27,13 @@ const CACHE_EXPIRATION = 60 * 60 * 24 * 1000; // 缓存1天（毫秒）
  */
 export async function GET() {
   try {
-    // 检查缓存
-    if (cacheStore && Date.now() - cacheStore.timestamp < CACHE_EXPIRATION) {
+    // 检查 Redis 缓存
+    const cachedData = await cache.get<CategoryData[]>(CACHE_KEY);
+    if (cachedData) {
       return NextResponse.json({
         code: 200,
-        data: cacheStore.data,
-        source: 'memory-cache',
-        cachedAt: new Date(cacheStore.timestamp).toISOString()
+        data: cachedData,
+        source: 'redis-cache'
       });
     }
 
@@ -106,11 +101,8 @@ export async function GET() {
       }
     ];
 
-    // 更新缓存
-    cacheStore = {
-      data: resultData,
-      timestamp: Date.now()
-    };
+    // 更新 Redis 缓存
+    await cache.set(CACHE_KEY, resultData);
 
     console.log('✅ 豆瓣数据抓取成功');
 
@@ -123,8 +115,7 @@ export async function GET() {
     });
 
   } catch (error) {
-    console.error('❌ 豆瓣数据抓取失败:', error);
-    
+   
     return NextResponse.json(
       {
         code: 500,
@@ -177,10 +168,10 @@ async function fetchDoubanData(type: string, tag: string) {
  * DELETE /api/douban/new
  */
 export async function DELETE() {
-  cacheStore = null;
+  await cache.del(CACHE_KEY);
   
   return NextResponse.json({
     code: 200,
-    message: '缓存已清除'
+    message: '新上线缓存已清除'
   });
 }

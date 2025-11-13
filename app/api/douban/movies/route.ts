@@ -116,8 +116,7 @@ export async function GET() {
     });
 
   } catch (error) {
-    console.error('❌ 电影分类数据获取失败:', error);
-    
+  
     return NextResponse.json(
       {
         code: 500,

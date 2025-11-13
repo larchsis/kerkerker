@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createCache } from '@/lib/redis';
 
 /**
  * Hero Banner API
@@ -32,18 +33,19 @@ interface HeroMovie {
   description?: string;
 }
 
-// 内存缓存
-let cacheStore: { data: HeroMovie[] | null; timestamp: number } | null = null;
-const CACHE_EXPIRATION = 60 * 60 * 1000; // 缓存1小时
+// Redis 缓存配置
+const cache = createCache(3600); // 缓存1小时
+const CACHE_KEY = 'douban:hero:movies';
 
 export async function GET() {
   try {
-    // 检查缓存
-    if (cacheStore && Date.now() - cacheStore.timestamp < CACHE_EXPIRATION && cacheStore.data) {
+    // 检查 Redis 缓存
+    const cachedData = await cache.get<HeroMovie[]>(CACHE_KEY);
+    if (cachedData) {
       return NextResponse.json({
         code: 200,
-        data: cacheStore.data,
-        source: 'cache'
+        data: cachedData,
+        source: 'redis-cache'
       });
     }
 
@@ -221,12 +223,17 @@ export async function GET() {
       // 从 TMDB 获取横向 backdrop，传递年份信息以提高匹配准确度
       const tmdbBackdrop = await searchTMDB(movie.title, releaseYear);
       
+      // 如果 TMDB 未匹配成功，返回 null（后续会被过滤掉）
+      if (!tmdbBackdrop) {
+        return null;
+      }
+      
       return {
         id: movie.id,
         title: movie.title,
         rate: movie.rate,
         cover: getHighQualityPoster(coverUrl),
-        poster_horizontal: tmdbBackdrop || getHighQualityPoster(coverUrl), // 使用 TMDB backdrop，失败则使用豆瓣高清图
+        poster_horizontal: tmdbBackdrop, // 使用 TMDB backdrop
         poster_vertical: getHighQualityPoster(coverUrl), // 使用豆瓣高清竖向海报
         url: movie.url,
         episode_info: movie.episode_info || '',
@@ -235,13 +242,13 @@ export async function GET() {
       };
     });
 
-    const heroDataList = await Promise.all(heroDataPromises);
+    const heroDataListRaw = await Promise.all(heroDataPromises);
+    
+    // 过滤掉 TMDB 未匹配的数据
+    const heroDataList = heroDataListRaw.filter((item): item is NonNullable<typeof item> => item !== null);
 
-    // 更新缓存
-    cacheStore = {
-      data: heroDataList,
-      timestamp: Date.now()
-    };
+    // 更新 Redis 缓存
+    await cache.set(CACHE_KEY, heroDataList);
 
     console.log('✅ Hero Banner 数据获取成功，共', heroDataList.length, '部电影');
 
@@ -270,7 +277,7 @@ export async function GET() {
  * DELETE /api/douban/hero
  */
 export async function DELETE() {
-  cacheStore = null;
+  await cache.del(CACHE_KEY);
   
   return NextResponse.json({
     code: 200,

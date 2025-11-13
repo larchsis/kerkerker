@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createCache } from '@/lib/redis';
 
 /**
  * 最新内容 API
@@ -26,19 +27,19 @@ interface CategoryData {
   data: LatestData[];
 }
 
-// 内存缓存
-let cacheStore: { data: CategoryData[]; timestamp: number } | null = null;
-const CACHE_EXPIRATION = 30 * 60 * 1000; // 缓存30分钟（最新内容更新更频繁）
+// Redis 缓存配置
+const cache = createCache(1800); // 缓存30分钟（最新内容更新更频繁）
+const CACHE_KEY = 'douban:latest:all';
 
 export async function GET() {
   try {
-    // 检查缓存
-    if (cacheStore && Date.now() - cacheStore.timestamp < CACHE_EXPIRATION) {
+    // 检查 Redis 缓存
+    const cachedData = await cache.get<CategoryData[]>(CACHE_KEY);
+    if (cachedData) {
       return NextResponse.json({
         code: 200,
-        data: cacheStore.data,
-        source: 'cache',
-        cachedAt: new Date(cacheStore.timestamp).toISOString()
+        data: cachedData,
+        source: 'redis-cache'
       });
     }
 
@@ -88,11 +89,8 @@ export async function GET() {
       }
     ];
 
-    // 更新缓存
-    cacheStore = {
-      data: resultData,
-      timestamp: Date.now()
-    };
+    // 更新 Redis 缓存
+    await cache.set(CACHE_KEY, resultData);
 
     console.log('✅ 最新内容数据获取成功');
 
@@ -158,7 +156,7 @@ async function fetchDoubanLatest(type: string, tag: string) {
  * DELETE /api/douban/latest
  */
 export async function DELETE() {
-  cacheStore = null;
+  await cache.del(CACHE_KEY);
   
   return NextResponse.json({
     code: 200,

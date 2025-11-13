@@ -105,6 +105,54 @@ http://your-domain.com/admin/settings
 2. 在 [Vercel](https://vercel.com) 导入项目
 3. 配置环境变量，ADMIN_PASSWORD= MONGODB_URI=
 4. 部署完成后访问 `/admin/settings` 配置视频源
+
+### Docker Hub 部署（生产环境推荐）
+
+#### 推送镜像
+
+```bash
+# 设置 Docker Hub 用户名
+export DOCKER_USERNAME=your-dockerhub-username
+
+# 推送到 Docker Hub
+npm run docker:push
+
+# 或推送特定版本
+bash scripts/push.sh v1.0.0
+```
+
+#### 服务器部署
+
+```bash
+# 1. 下载部署文件
+wget https://raw.githubusercontent.com/YOUR_REPO/kerkerker/main/docker-compose.server.yml
+wget https://raw.githubusercontent.com/YOUR_REPO/kerkerker/main/scripts/deploy-server.sh
+chmod +x deploy-server.sh
+
+# 2. 配置环境变量
+nano .env
+
+# 3. 部署
+export DOCKER_USERNAME=your-dockerhub-username
+bash deploy-server.sh
+```
+
+📖 详细说明：[Docker Hub 部署指南](DOCKER_HUB_GUIDE.md) | [服务器快速部署](SERVER_DEPLOY.md)
+
+### Docker 本地部署
+
+```bash
+# 开发环境
+npm run docker:dev
+
+# 生产环境
+npm run docker:prod
+
+# 停止服务
+npm run docker:stop
+```
+
+📖 详细说明：[Docker 指南](DOCKER_GUIDE.md)
  
 ### 自托管
 
