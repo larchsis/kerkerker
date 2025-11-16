@@ -158,7 +158,7 @@ export function UnifiedPlayer({
       {/* 播放器 - 使用key强制重新挂载，避免切换时两个播放器同时存在 */}
       {currentMode === 'iframe' && (
         <IframePlayer
-          key={`iframe-${videoUrl}`}
+          key={`iframe-${currentIframePlayerIndex}-${videoUrl}`}
           videoUrl={videoUrl}
           players={playerConfig.iframePlayers}
           currentPlayerIndex={currentIframePlayerIndex}
