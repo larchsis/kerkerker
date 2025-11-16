@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, Home } from "lucide-react";
 import Link from "next/link";
@@ -12,7 +12,7 @@ import { Pagination } from "@/components/dailymotion/Pagination";
 import { VideoPlayerModal } from "@/components/dailymotion/VideoPlayerModal";
 import { LoadingSkeleton } from "@/components/dailymotion/LoadingSkeleton";
 
-export default function DailymotionPage() {
+function DailymotionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [channels, setChannels] = useState<DailymotionChannelConfig[]>([]);
@@ -249,5 +249,13 @@ export default function DailymotionPage() {
         formatTimeAgo={formatTimeAgo}
       />
     </div>
+  );
+}
+
+export default function DailymotionPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton />}>
+      <DailymotionContent />
+    </Suspense>
   );
 }
