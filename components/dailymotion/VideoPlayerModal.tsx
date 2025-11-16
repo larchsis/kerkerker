@@ -28,13 +28,13 @@ export function VideoPlayerModal({
       {/* Close Button */}
       <button
         onClick={onClose}
-        className="fixed top-4 right-4 z-60 p-2 bg-gray-900/90 hover:bg-gray-800 rounded-full transition-colors border border-gray-700"
+        className="fixed top-4 right-4 z-60 p-2 bg-neutral-900/90 hover:bg-neutral-800 rounded-full transition-colors border border-neutral-800"
       >
         <X size={24} className="text-white" />
       </button>
 
       <div
-        className="relative w-full max-w-5xl bg-gray-900 rounded-xl overflow-hidden animate-scaleIn"
+        className="relative w-full max-w-5xl bg-neutral-950 rounded-xl overflow-hidden animate-scaleIn"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Video Player */}
@@ -49,14 +49,14 @@ export function VideoPlayerModal({
               onError={onError}
             />
           ) : (
-            <div className="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center bg-slate-800 gap-4">
+            <div className="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center bg-neutral-950 gap-4">
               <AlertCircle size={56} className="text-red-400" />
               <p className="text-white text-xl font-medium">视频加载失败</p>
               <a
                 href={`https://www.dailymotion.com/video/${video.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
               >
                 在 Dailymotion 上观看
               </a>
@@ -65,7 +65,7 @@ export function VideoPlayerModal({
         </div>
 
         {/* Video Info */}
-        <div className="p-5 md:p-6 space-y-3 bg-gray-900">
+        <div className="p-5 md:p-6 space-y-3 bg-neutral-950">
           <h2 className="text-sm font-semibold text-white leading-snug">{video.title}</h2>
           <div className="flex items-center flex-wrap gap-3 text-xs text-gray-400">
             {video.views_total !== undefined && (

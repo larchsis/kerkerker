@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Home } from "lucide-react";
+import Link from "next/link";
 import { DailymotionChannel, DailymotionVideo } from "@/types/dailymotion";
 import type { DailymotionChannelConfig } from "@/types/dailymotion-config";
 import { ChannelSelector } from "@/components/dailymotion/ChannelSelector";
@@ -184,7 +185,7 @@ export default function DailymotionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-gray-900 to-gray-950 text-white">
+    <div className="min-h-screen bg-black text-white">
       <style jsx global>{`
         .scrollbar-hide::-webkit-scrollbar {
           display: none;
@@ -194,6 +195,17 @@ export default function DailymotionPage() {
           scrollbar-width: none;
         }
       `}</style>
+      
+      {/* Top Navigation */}
+      <div className="px-3 md:px-6 lg:px-10 py-3 border-b border-neutral-900">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-gray-400 hover:text-red-600 transition-colors text-sm group"
+        >
+          <Home size={18} className="group-hover:scale-110 transition-transform" />
+          <span className="font-medium">返回首页</span>
+        </Link>
+      </div>
       
       {/* Channel Selector */}
       <ChannelSelector
