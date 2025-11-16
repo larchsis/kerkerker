@@ -8,7 +8,7 @@ import { SourceSelector } from "@/components/player/SourceSelector";
 import { PlayerSettingsPanel } from "@/components/player/PlayerSettingsPanel";
 import type { PlayerConfig } from "@/app/api/player-config/route";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, X, ChevronLeft } from "lucide-react";
 
 interface AvailableSource {
   source_key: string;
@@ -31,6 +31,7 @@ export default function PlayPage() {
   const [currentEpisode, setCurrentEpisode] = useState(0);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [showAllEpisodes, setShowAllEpisodes] = useState(false);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
 
   // 多源相关状态
   const [availableSources, setAvailableSources] = useState<AvailableSource[]>(
@@ -367,15 +368,25 @@ export default function PlayPage() {
                 onIframePlayerChange={setCurrentIframePlayerIndex}
               />
             )}
+            {/* 展开侧边栏按钮 */}
+            {!isRightPanelOpen && (
+              <button
+                onClick={() => setIsRightPanelOpen(true)}
+                className="p-2 rounded-lg bg-white/5 hover:bg-red-500/10 transition-all duration-300 group"
+                title="打开侧边栏"
+              >
+                <ChevronLeft className="w-5 h-5 text-white group-hover:text-red-500 transform rotate-180" />
+              </button>
+            )}
           </div>
         </div>
       </nav>
 
       {/* 主内容区域 - 左右分栏布局 */}
-      <div className="max-w-[1920px] mx-auto flex flex-col lg:flex-row gap-0 p-0">
+      <div className="max-w-[1920px] mx-auto flex flex-col lg:flex-row gap-0 p-0 relative">
         {/* 左侧：视频播放器区域 */}
-        <div className="flex-1 lg:min-h-[calc(100vh-65px)]">
-          <div className="relative aspect-video w-full h-full bg-black overflow-hidden">
+        <div className={`flex-1 transition-all duration-300 ${isRightPanelOpen ? 'lg:min-h-[calc(100vh-65px)]' : 'lg:h-[calc(100vh-65px)]'}`}>
+          <div className={`relative w-full bg-black overflow-hidden ${isRightPanelOpen ? 'aspect-video h-full' : 'h-full'}`}>
             {dramaDetail && dramaDetail.episodes.length > 0 && (
               <UnifiedPlayer
                 videoUrl={dramaDetail.episodes[currentEpisode].url}
@@ -427,8 +438,17 @@ export default function PlayPage() {
         </div>
 
         {/* 右侧：剧集信息和选择器 - Netflix风格 */}
-        <div className="w-full lg:w-[380px] xl:w-[420px] bg-zinc-900 overflow-y-auto lg:max-h-[calc(100vh-65px)] relative">
-          <div className="p-4 lg:p-6 space-y-4 lg:space-y-6">
+        {isRightPanelOpen ? (
+          <div className="w-full lg:w-[380px] xl:w-[420px] bg-zinc-900 overflow-y-auto lg:max-h-[calc(100vh-65px)] relative">
+            {/* 关闭按钮 */}
+            <button
+              onClick={() => setIsRightPanelOpen(false)}
+              className="absolute top-4 right-4 z-20 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-all duration-300 group"
+              title="关闭侧边栏"
+            >
+              <X className="w-5 h-5 text-gray-300 group-hover:text-white" />
+            </button>
+            <div className="p-4 lg:p-6 space-y-4 lg:space-y-6">
             {/* 查看全部集数模式 */}
             {showAllEpisodes ? (
               <div className="space-y-4 lg:space-y-6">
@@ -678,6 +698,7 @@ export default function PlayPage() {
             )}
           </div>
         </div>
+        ) : null}
       </div>
     </div>
   );
