@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Play, Star, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { ArrowLeft, Play, Star, Loader2, AlertCircle, RefreshCw, Clock, MapPin, Users, Clapperboard } from "lucide-react";
 import Link from "next/link";
 import { getImageUrl } from "@/lib/utils/image-utils";
-import { loadMovieCache, MovieCacheData } from "@/hooks/useMovieMatch";
+import { cleanTitleForSearch } from "@/lib/utils/title-utils";
+import { loadMovieCache } from "@/hooks/useMovieMatch";
 
 interface AvailableSource {
   source_key: string;
@@ -22,13 +23,27 @@ interface CachedMatchData {
   timestamp: number;
 }
 
-type SearchStatus = "idle" | "searching" | "success" | "error" | "not_found";
-
-// 在组件外部读取缓存的函数（避免 SSR 问题）
-function getInitialMovieData(doubanId: string): MovieCacheData | null {
-  if (typeof window === 'undefined') return null;
-  return loadMovieCache(doubanId);
+// 完整的电影详情
+interface MovieDetail {
+  id: string;
+  title: string;        // 完整标题（含外文名/年份）用于显示
+  searchTitle: string;  // 简短标题用于搜索
+  cover: string;
+  rate: string;
+  types: string[];
+  directors: string[];
+  actors: string[];
+  duration: string;
+  region: string;
+  release_year: string;
+  episodes_count: string;
+  short_comment?: {
+    content: string;
+    author: string;
+  };
 }
+
+type SearchStatus = "idle" | "searching" | "success" | "error" | "not_found";
 
 export default function MovieDetailPage() {
   const params = useParams();
@@ -36,14 +51,79 @@ export default function MovieDetailPage() {
   
   const doubanId = params.id as string;
   
-  // 使用函数初始化状态，避免 useEffect 中的 setState
-  const [movieData] = useState<MovieCacheData | null>(() => getInitialMovieData(doubanId));
-  
-  // 电影基本信息
-  const title = movieData?.title || "";
-  const cover = movieData?.cover || "";
-  const rate = movieData?.rate || "";
-  const episodeInfo = movieData?.episode_info || "";
+  // 电影详情状态
+  const [movieDetail, setMovieDetail] = useState<MovieDetail | null>(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(true);
+
+  // 获取电影详情：优先缓存快速显示，API 补充详细信息
+  useEffect(() => {
+    // 1. 立即从缓存加载数据（快速显示）
+    const cached = loadMovieCache(doubanId);
+    if (cached) {
+      setMovieDetail({
+        id: cached.id,
+        title: cached.title,
+        searchTitle: cached.title, // 缓存的是简短标题
+        cover: cached.cover,
+        rate: cached.rate,
+        types: [],
+        directors: [],
+        actors: [],
+        duration: '',
+        region: '',
+        release_year: '',
+        episodes_count: cached.episode_info || '',
+      });
+      setIsLoadingDetail(false); // 有缓存立即结束加载状态
+    }
+    
+    // 2. 异步请求 API 补充详细信息
+    const fetchApiDetail = async () => {
+      try {
+        const response = await fetch(`/api/douban/detail/${doubanId}`);
+        if (response.ok) {
+          const apiData = await response.json();
+          if (apiData.id) {
+            // 用 API 数据补充缓存没有的字段，缓存字段优先
+            setMovieDetail(prev => {
+              const cachedData = prev || {} as MovieDetail;
+              return {
+                id: cachedData.id || apiData.id,
+                title: cachedData.title || apiData.title,
+                searchTitle: cachedData.searchTitle || cleanTitleForSearch(apiData.title),
+                // 封面：缓存优先，但如果缓存是空的则用API的
+                cover: cachedData.cover || apiData.cover || '',
+                rate: cachedData.rate || apiData.rate || '',
+                // 以下字段缓存通常没有，用 API 补充
+                types: apiData.types || cachedData.types || [],
+                directors: apiData.directors || cachedData.directors || [],
+                actors: apiData.actors || cachedData.actors || [],
+                duration: apiData.duration || cachedData.duration || '',
+                region: apiData.region || cachedData.region || '',
+                release_year: apiData.release_year || cachedData.release_year || '',
+                episodes_count: cachedData.episodes_count || apiData.episodes_count || '',
+                short_comment: apiData.short_comment || cachedData.short_comment,
+              };
+            });
+          }
+        }
+      } catch (error) {
+        console.warn('API 获取详情失败:', error);
+      } finally {
+        setIsLoadingDetail(false);
+      }
+    };
+    
+    if (doubanId) {
+      fetchApiDetail();
+    }
+  }, [doubanId]);
+
+  // 便捷访问
+  const title = movieDetail?.title || "";
+  const searchTitle = movieDetail?.searchTitle || "";  // 用于搜索的简短标题
+  const cover = movieDetail?.cover || "";
+  const rate = movieDetail?.rate || "";
 
   // 搜索状态
   const [searchStatus, setSearchStatus] = useState<SearchStatus>("idle");
@@ -84,8 +164,9 @@ export default function MovieDetailPage() {
     setTotalSourceCount(0);
 
     try {
+      // 使用简短标题搜索，提高匹配率
       const response = await fetch(
-        `/api/douban/match-vod-stream?title=${encodeURIComponent(title)}&douban_id=${doubanId}`
+        `/api/douban/match-vod-stream?title=${encodeURIComponent(searchTitle)}&douban_id=${doubanId}`
       );
 
       if (!response.ok) {
@@ -137,17 +218,20 @@ export default function MovieDetailPage() {
                   }
                 }
               } else if (data.type === 'done') {
-                // 搜索完成，缓存结果
+                // 搜索完成
                 if (allMatches.length > 0) {
+                  // 缓存结果
                   localStorage.setItem(
                     "multi_source_matches",
                     JSON.stringify({
                       douban_id: doubanId,
-                      title: title,
+                      title: searchTitle,
                       matches: allMatches,
                       timestamp: Date.now(),
                     })
                   );
+                  // 确保状态为成功
+                  setSearchStatus("success");
                 } else {
                   setSearchStatus("not_found");
                   setErrorMessage(`已搜索 ${data.totalSources} 个视频源，未找到匹配内容`);
@@ -163,14 +247,14 @@ export default function MovieDetailPage() {
       setSearchStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "搜索播放源时出错");
     }
-  }, [doubanId, title]);
+  }, [doubanId, searchTitle]);
 
   // 组件挂载时自动搜索
   useEffect(() => {
     let isMounted = true;
     
     const doSearch = async () => {
-      if (doubanId && title && isMounted) {
+      if (doubanId && searchTitle && isMounted) {
         await searchPlaySources();
       }
     };
@@ -180,7 +264,7 @@ export default function MovieDetailPage() {
     return () => {
       isMounted = false;
     };
-  }, [doubanId, title, searchPlaySources]);
+  }, [doubanId, searchTitle, searchPlaySources]);
 
   // 播放
   const handlePlay = (source: AvailableSource) => {
@@ -208,7 +292,7 @@ export default function MovieDetailPage() {
         <div className="absolute inset-0 bg-linear-to-r from-[#0a0a0a] via-[#0a0a0a]/60 to-transparent z-10" />
       </div>
 
-      {/* 导航栏 - 保持与其他页面一致的顶部栏风格 */}
+      {/* 导航栏 */}
       <nav className="sticky top-0 left-0 right-0 z-50 bg-[#0a0a0a]/95 backdrop-blur-xl border-b border-white/5 shadow-2xl shadow-black/50">
         <div className="max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
@@ -229,7 +313,76 @@ export default function MovieDetailPage() {
         </div>
       </nav>
 
+      {/* 加载中骨架屏 */}
+      {isLoadingDetail && (
+        <main className="relative z-20 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+          <div className="flex flex-col lg:flex-row gap-12 items-start">
+            {/* 海报骨架 */}
+            <div className="w-full max-w-[300px] mx-auto lg:w-[360px] shrink-0">
+              <div className="aspect-2/3 rounded-2xl bg-white/10 animate-pulse shadow-2xl shadow-black/50" />
+            </div>
+            
+            {/* 信息骨架 */}
+            <div className="flex-1 w-full space-y-6">
+              {/* 标题 */}
+              <div className="space-y-3">
+                <div className="h-10 md:h-14 bg-white/10 rounded-xl w-3/4 animate-pulse" />
+              </div>
+              
+              {/* 评分和标签行 */}
+              <div className="flex flex-wrap gap-3">
+                <div className="h-9 w-20 bg-yellow-500/10 rounded-lg animate-pulse" />
+                <div className="h-9 w-16 bg-white/10 rounded-lg animate-pulse delay-75" />
+                <div className="h-9 w-24 bg-white/10 rounded-lg animate-pulse delay-100" />
+                <div className="h-9 w-20 bg-white/10 rounded-lg animate-pulse delay-150" />
+              </div>
+              
+              {/* 类型标签 */}
+              <div className="flex gap-2">
+                <div className="h-7 w-16 bg-red-500/10 rounded-full animate-pulse" />
+                <div className="h-7 w-14 bg-red-500/10 rounded-full animate-pulse delay-75" />
+                <div className="h-7 w-18 bg-red-500/10 rounded-full animate-pulse delay-100" />
+              </div>
+              
+              {/* 导演/演员 */}
+              <div className="space-y-3">
+                <div className="flex gap-2 items-center">
+                  <div className="h-4 w-12 bg-white/5 rounded animate-pulse" />
+                  <div className="h-4 w-40 bg-white/10 rounded animate-pulse delay-75" />
+                </div>
+                <div className="flex gap-2 items-center">
+                  <div className="h-4 w-12 bg-white/5 rounded animate-pulse" />
+                  <div className="h-4 w-64 bg-white/10 rounded animate-pulse delay-100" />
+                </div>
+              </div>
+              
+              {/* 短评骨架 */}
+              <div className="bg-white/5 rounded-xl p-4 space-y-2 animate-pulse">
+                <div className="h-4 bg-white/10 rounded w-full" />
+                <div className="h-4 bg-white/10 rounded w-5/6" />
+                <div className="h-3 bg-white/5 rounded w-24 mt-3" />
+              </div>
+              
+              {/* 播放源区域骨架 */}
+              <div className="bg-white/5 rounded-3xl p-6 mt-8 space-y-4">
+                <div className="flex justify-between items-center">
+                  <div className="h-6 w-20 bg-white/10 rounded animate-pulse" />
+                  <div className="h-4 w-28 bg-white/5 rounded animate-pulse" />
+                </div>
+                <div className="h-12 w-36 bg-red-500/20 rounded-full mx-auto animate-pulse" />
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="h-16 bg-white/5 rounded-xl animate-pulse" style={{ animationDelay: `${i * 50}ms` }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      )}
+
       {/* 主内容 */}
+      {!isLoadingDetail && (
       <main className="relative z-20 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="flex flex-col lg:flex-row gap-12 items-start">
           {/* 左侧海报 */}
@@ -252,19 +405,78 @@ export default function MovieDetailPage() {
                 {title}
               </h1>
               
-              <div className="flex flex-wrap items-center gap-3 text-sm md:text-base">
+              {/* 评分和基本标签 */}
+              <div className="flex flex-wrap items-center gap-3 text-sm md:text-base mb-6">
                 {rate && (
                   <div className="flex items-center gap-1.5 bg-yellow-500/20 text-yellow-400 px-3 py-1.5 rounded-lg border border-yellow-500/20 backdrop-blur-sm shadow-sm">
                     <Star className="w-4 h-4 fill-current" />
                     <span className="font-bold">{rate}</span>
                   </div>
                 )}
-                {episodeInfo && (
+                {movieDetail?.release_year && (
                   <div className="px-3 py-1.5 bg-white/10 rounded-lg text-gray-200 backdrop-blur-sm border border-white/5">
-                    {episodeInfo}
+                    {movieDetail.release_year}
+                  </div>
+                )}
+                {movieDetail?.duration && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 rounded-lg text-gray-200 backdrop-blur-sm border border-white/5">
+                    <Clock className="w-3.5 h-3.5" />
+                    {movieDetail.duration}
+                  </div>
+                )}
+                {movieDetail?.region && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 rounded-lg text-gray-200 backdrop-blur-sm border border-white/5">
+                    <MapPin className="w-3.5 h-3.5" />
+                    {movieDetail.region}
+                  </div>
+                )}
+                {movieDetail?.episodes_count && (
+                  <div className="px-3 py-1.5 bg-blue-500/20 text-blue-300 rounded-lg border border-blue-500/20">
+                    {movieDetail.episodes_count}
                   </div>
                 )}
               </div>
+
+              {/* 类型标签 */}
+              {movieDetail?.types && movieDetail.types.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {movieDetail.types.map((type, idx) => (
+                    <span key={idx} className="px-3 py-1 bg-red-500/20 text-red-300 rounded-full text-sm border border-red-500/20">
+                      {type}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* 导演和演员 */}
+              <div className="space-y-3 mb-6">
+                {movieDetail?.directors && movieDetail.directors.length > 0 && (
+                  <div className="flex items-start gap-2 text-sm">
+                    <span className="text-gray-500 shrink-0 flex items-center gap-1">
+                      <Clapperboard className="w-4 h-4" />
+                      导演:
+                    </span>
+                    <span className="text-gray-300">{movieDetail.directors.join(' / ')}</span>
+                  </div>
+                )}
+                {movieDetail?.actors && movieDetail.actors.length > 0 && (
+                  <div className="flex items-start gap-2 text-sm">
+                    <span className="text-gray-500 shrink-0 flex items-center gap-1">
+                      <Users className="w-4 h-4" />
+                      主演:
+                    </span>
+                    <span className="text-gray-300 line-clamp-2">{movieDetail.actors.slice(0, 5).join(' / ')}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 短评 */}
+              {movieDetail?.short_comment && (
+                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                  <p className="text-gray-300 text-sm italic leading-relaxed">&ldquo;{movieDetail.short_comment.content}&rdquo;</p>
+                  <p className="text-gray-500 text-xs mt-2">—— {movieDetail.short_comment.author}</p>
+                </div>
+              )}
             </div>
 
             {/* 播放源区域 */}
@@ -389,6 +601,7 @@ export default function MovieDetailPage() {
           </div>
         </div>
       </main>
+      )}
     </div>
   );
 }

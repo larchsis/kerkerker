@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createCache } from '@/lib/redis';
+import { doubanSearchSubjects, getProxyStatus } from '@/lib/douban-client';
 
 interface CategoryData {
   name: string;
@@ -37,7 +38,8 @@ export async function GET() {
       });
     }
 
-    console.log('🚀 开始抓取豆瓣数据...');
+    const proxyStatus = getProxyStatus();
+    console.log('🚀 开始抓取豆瓣数据...', proxyStatus.enabled ? `(代理: ${proxyStatus.count + " 个代理"})` : '');
 
     // 并行抓取所有分类数据
     const [
@@ -132,30 +134,13 @@ export async function GET() {
  */
 async function fetchDoubanData(type: string, tag: string) {
   try {
-    const url = new URL('https://movie.douban.com/j/search_subjects');
-    url.searchParams.append('type', type);
-    url.searchParams.append('tag', tag);
-    url.searchParams.append('page_limit', '24');
-    url.searchParams.append('page_start', '0');
-
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Referer': 'https://movie.douban.com/'
-      },
-      // 添加超时控制
-      signal: AbortSignal.timeout(10000)
+    const data = await doubanSearchSubjects({
+      type,
+      tag,
+      page_limit: 24,
+      page_start: 0
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    
     console.log(`✓ 抓取成功: ${tag} (${data.subjects?.length || 0}条)`);
-    
     return data;
   } catch (error) {
     console.error(`✗ 抓取失败: ${tag}`, error);

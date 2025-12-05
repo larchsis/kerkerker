@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createCache } from '@/lib/redis';
+import { doubanSearchSubjects, getProxyStatus } from '@/lib/douban-client';
 
 // 缓存数据接口
 interface CacheData {
@@ -38,7 +39,8 @@ export async function GET() {
       });
     }
 
-    console.log('🚀 开始抓取豆瓣 Top 250...');
+    const proxyStatus = getProxyStatus();
+    console.log('🚀 开始抓取豆瓣 Top 250...', proxyStatus.enabled ? `(代理: ${proxyStatus.count + " 个代理"})` : '');
 
     // 分批抓取（每批25部，共10批）
     const allMovies: Array<{
@@ -98,27 +100,12 @@ export async function GET() {
  */
 async function fetchTop250Batch(start: number) {
   try {
-    const url = new URL('https://movie.douban.com/j/search_subjects');
-    url.searchParams.append('type', 'movie');
-    url.searchParams.append('tag', '豆瓣高分');
-    url.searchParams.append('sort', 'recommend');
-    url.searchParams.append('page_limit', '25');
-    url.searchParams.append('page_start', start.toString());
-
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Referer': 'https://movie.douban.com/',
-      },
-      signal: AbortSignal.timeout(10000),
+    const data = await doubanSearchSubjects({
+      type: 'movie',
+      tag: '豆瓣高分',
+      page_limit: 25,
+      page_start: start
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
     
     console.log(`✓ 抓取 Top 250 第 ${start / 25 + 1} 批: ${data.subjects?.length || 0} 部`);
     

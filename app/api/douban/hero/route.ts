@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createCache } from '@/lib/redis';
+import { doubanSearchSubjects, doubanSubjectAbstract, getProxyStatus } from '@/lib/douban-client';
 
 /**
  * Hero Banner API
@@ -49,29 +50,15 @@ export async function GET() {
       });
     }
 
-    console.log('🎬 开始获取 Hero Banner 数据...');
+    const proxyStatus = getProxyStatus();
+    console.log('🎬 开始获取 Hero Banner 数据...', proxyStatus.enabled ? `(代理: ${proxyStatus.count + " 个代理"})` : '(无代理)');
 
-    // 获取豆瓣热映电影
-    const hotMoviesUrl = new URL('https://movie.douban.com/j/search_subjects');
-    hotMoviesUrl.searchParams.append('type', '');
-    hotMoviesUrl.searchParams.append('tag', '热门');
-    hotMoviesUrl.searchParams.append('page_limit', '20');
-    hotMoviesUrl.searchParams.append('page_start', '0');
-
-    const response = await fetch(hotMoviesUrl.toString(), {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Referer': 'https://movie.douban.com/'
-      },
-      signal: AbortSignal.timeout(10000)
+    // 获取豆瓣热映电影（使用统一客户端）
+    const data = await doubanSearchSubjects({
+      tag: '热门',
+      page_limit: 20,
+      page_start: 0
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
     
     if (!data.subjects || data.subjects.length === 0) {
       throw new Error('未获取到电影数据');
@@ -185,25 +172,15 @@ export async function GET() {
       let releaseYear = null;
       
       try {
-        const detailResponse = await fetch(`https://movie.douban.com/j/subject_abstract?subject_id=${movie.id}`, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-            'Referer': 'https://movie.douban.com/'
-          },
-          signal: AbortSignal.timeout(5000)
-        });
+        movieDetail = await doubanSubjectAbstract(movie.id);
+        // 从详情中提取年份
+        releaseYear = movieDetail?.subject?.release_year || null;
         
-        if (detailResponse.ok) {
-          movieDetail = await detailResponse.json();
-          // 从详情中提取年份
-          releaseYear = movieDetail?.subject?.release_year || null;
-          
-          // 如果没有 release_year，尝试从 title 中提取
-          if (!releaseYear && movieDetail?.subject?.title) {
-            const yearMatch = movieDetail.subject.title.match(/\((\d{4})\)/);
-            if (yearMatch) {
-              releaseYear = yearMatch[1];
-            }
+        // 如果没有 release_year，尝试从 title 中提取
+        if (!releaseYear && movieDetail?.subject?.title) {
+          const yearMatch = movieDetail.subject.title.match(/\((\d{4})\)/);
+          if (yearMatch) {
+            releaseYear = yearMatch[1];
           }
         }
       } catch {
@@ -221,7 +198,7 @@ export async function GET() {
       };
       
       // 从 TMDB 获取横向 backdrop，传递年份信息以提高匹配准确度
-      const tmdbBackdrop = await searchTMDB(movie.title, releaseYear);
+      const tmdbBackdrop = await searchTMDB(movie.title, releaseYear ?? undefined);
       
       // 如果 TMDB 未匹配成功，返回 null（后续会被过滤掉）
       if (!tmdbBackdrop) {
@@ -237,8 +214,8 @@ export async function GET() {
         poster_vertical: getHighQualityPoster(coverUrl), // 使用豆瓣高清竖向海报
         url: movie.url,
         episode_info: movie.episode_info || '',
-        genres: movieDetail?.subject?.genres || [],
-        description: movieDetail?.subject?.intro || ''
+        genres: movieDetail?.subject?.types || [],
+        description: movieDetail?.subject?.short_comment?.content || ''
       };
     });
 
