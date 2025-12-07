@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Star } from "lucide-react";
 import type { DoubanMovie } from "@/types/douban";
 import type { NewApiMovie } from "@/types/home";
 import { Toast } from "@/components/Toast";
@@ -32,7 +31,7 @@ export default function HomePage() {
 
   // 使用自定义 hooks
   const scrolled = useScrollState(50);
-  const { categories, top250Movies, heroMovies, heroDataList, loading, error, refetch } = useHomeData();
+  const { categories, heroMovies, heroDataList, loading, error, refetch } = useHomeData();
   const { matchingMovie, handleMovieClick, toast, setToast } = useMovieMatch();
 
   return (
@@ -55,7 +54,7 @@ export default function HomePage() {
       ) : error ? (
         /* 错误状态 */
         <ErrorState error={error} onRetry={refetch} />
-      ) : heroMovies.length === 0 && categories.length === 0 && top250Movies.length === 0 ? (
+      ) : heroMovies.length === 0 && categories.length === 0 ? (
         /* 空状态 - 只有当所有数据都为空时才显示 */
         <EmptyState onRetry={refetch} />
       ) : (
@@ -102,17 +101,6 @@ export default function HomePage() {
                 );
               })
             ) : null}
-
-            {/* 豆瓣 Top 250 */}
-            {top250Movies.length > 0 && (
-              <CategoryRow
-                title="豆瓣 Top 250"
-                icon={<Star className="w-5 h-5 fill-current text-yellow-500" />}
-                movies={top250Movies}
-                onMovieClick={handleMovieClick}
-                onViewMore={() => router.push("/category/top250")}
-              />
-            )}
           </div>
         </>
       )}
